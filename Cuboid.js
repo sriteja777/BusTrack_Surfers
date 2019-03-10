@@ -1,10 +1,16 @@
 class Cuboid {
-    constructor(center, width, height, depth, color) {
+    constructor(center, width, height, depth, color, textureImage = WHITE_TEXTURE, textureOptions = {s:gl.REPEAT, t:gl.REPEAT}, is_2 = true) {
         this.center = center;
         this.height = height;
         this.width = width;
         this.depth = depth;
         this.color = color;
+        if (textureImage !== WHITE_TEXTURE) {
+            this.texture = loadTexture(gl, textureImage, textureOptions);
+        }
+        else {
+            this.texture = textureImage;
+        }
         const vertex_buffer_data = [
             -1.0, -1.0,  1.0,
             1.0, -1.0,  1.0,
@@ -42,26 +48,117 @@ class Cuboid {
             -1.0,  1.0, -1.0
         ];
 
-        const vert = [
-            1.0, 1.0, 1.0,
-            -1.0, 1.0, 1.0,
-            -1.0, -1.0, 1.0,
-            1.0, -1.0, 1.0,
+        // const vert = [
+        //     1.0, 1.0, 1.0,
+        //     -1.0, 1.0, 1.0,
+        //     -1.0, -1.0, 1.0,
+        //     1.0, -1.0, 1.0,
+        //
+        //     1.0, 1.0, -1.0,
+        //     -1.0, 1.0, -1.0,
+        //     -1.0, -1.0, -1.0,
+        //     1.0, -1.0, -1.0,
+        // ];
+        let faceColors = [];
 
-            1.0, 1.0, -1.0,
-            -1.0, 1.0, -1.0,
-            -1.0, -1.0, -1.0,
-            1.0, -1.0, -1.0,
-        ];
-        const faceColors = [
-            [1.0,  1.0,  1.0,  1.0],    // Front face: white
-            [1.0,  0.0,  0.0,  1.0],    // Back face: red
-            [0.0,  1.0,  0.0,  1.0],    // Top face: green
-            [0.0,  0.0,  1.0,  1.0],    // Bottom face: blue
-            [1.0,  1.0,  0.0,  1.0],    // Right face: yellow
-            [1.0,  0.0,  1.0,  1.0],    // Left face: purple
-        ];
+        if (color === -1 || color === '') {
+            faceColors = [
+                [1.0, 1.0, 1.0, 1.0],    // Front face: white
+                [1.0, 0.0, 0.0, 1.0],    // Back face: red
+                [0.0, 1.0, 0.0, 1.0],    // Top face: green
+                [0.0, 0.0, 1.0, 1.0],    // Bottom face: blue
+                [1.0, 1.0, 0.0, 1.0],    // Right face: yellow
+                [1.0, 0.0, 1.0, 1.0],    // Left face: purple
+            ];
+        }
+        else if (color === 0){
+            faceColors = [
+                COLORS_0_1.WHITE,
+                COLORS_0_1.WHITE,
+                COLORS_0_1.WHITE,
+                COLORS_0_1.WHITE,
+                COLORS_0_1.WHITE,
+                COLORS_0_1.WHITE,
+            ];
+
+        } else if (color.length === 6) {
+            faceColors = color;
+            console.log('facecolors',faceColors)
+        }
+        let textureCoordinates = [];
+        if (is_2) {
+
+
+             textureCoordinates = [
+                // Front
+                0, 0,
+                width, 0,
+                width, height,
+                0, height,
+
+                // Back
+                0.0, 0.0,
+                width, 0.0,
+                height, height,
+                0.0, height,
+                // Top
+                0.0, 0.0,
+                depth, 0.0,
+                depth, width,
+                0.0, width,
+
+                // Bottom
+                0.0, 0.0,
+                width, 0.0,
+                width, depth,
+                0.0, depth,
+                // Right
+                0.0, 0.0,
+                height, 0.0,
+                height, depth,
+                0.0, depth,
+                // Left
+                0.0, 0.0,
+                depth, 0.0,
+                depth, height,
+                0.0, height,
+            ];
+        } else {
+            textureCoordinates = [
+                // Front
+                0.0,  0.0,
+                1.0,  0.0,
+                1.0,  1.0,
+                0.0,  1.0,
+                // Back
+                0.0,  0.0,
+                1.0,  0.0,
+                1.0,  1.0,
+                0.0,  1.0,
+                // Top
+                0.0,  0.0,
+                1.0,  0.0,
+                1.0,  1.0,
+                0.0,  1.0,
+                // Bottom
+                0.0,  0.0,
+                1.0,  0.0,
+                1.0,  1.0,
+                0.0,  1.0,
+                // Right
+                0.0,  1.0,
+                0.0,  0.0,
+                1.0,  0.0,
+                1.0,  1.0,
+                // Left
+                1.0,  1.0,
+                0.0,  1.0,
+                0.0,  0.0,
+                1.0,  0.0,
+            ];
+        }
         var colors = [];
+
 
         for (var j = 0; j < faceColors.length; ++j) {
             const c = faceColors[j];
@@ -78,6 +175,7 @@ class Cuboid {
             16, 17, 18,     16, 18, 19,   // right
             20, 21, 22,     20, 22, 23,   // left
         ];
+
         // const ind = [
         //   0, 1, 2,   0, 2, 3,  //front
         //   4,5,6,     4,7,6, // back
@@ -87,9 +185,27 @@ class Cuboid {
         //     0,3,7,  0,4,7
         // ];
         // this.vao = create3DObject(vertex_buffer_data, indices, 36, colors);
-        this.vao = create3DObject(vert, ind, 36, colors);
+
+        this.vao = create3DObjectBoth(vertex_buffer_data, indices, textureCoordinates, colors, 36);
         this.modelMatrix = mat4.create();
-        mat4.translate(this.modelMatrix, this.modelMatrix, this.center);
+        // let temp_mat = mat4.create();
+        // console.log(temp_mat);
+        // mat4.translate(temp_mat, temp_mat, [1,2,3]);
+        // console.log(temp_mat);
+        // sleep(500);
+
+        // while (true) {
+        //
+        // }
+        let trans = mat4.create();
+        let scale = mat4.create();
+        let comp = mat4.create();
+        // mat4.scale(this.modelMatrix, this.modelMatrix, [width/2, height/2, depth/2]);
+        // mat4.translate(this.modelMatrix, this.modelMatrix, this.center);
+        mat4.scale(scale, scale, vec3.fromValues(width/2, height/2, depth/2));
+        mat4.translate(trans, trans, this.center);
+        mat4.multiply(this.modelMatrix, trans, scale);
+        // mat4.fromRotationTranslationScale(this.modelMatrix, mat4.create(), this.center, vec3.fromValues(width/2, height/2, depth/2))
     }
 
     draw(programInfo, VP) {
@@ -99,6 +215,20 @@ class Cuboid {
             programInfo.uniformLocations.MVPMatrix,
             false,
             MVPMatrix);
-        draw3DObject(programInfo, this.vao, MVPMatrix)
+        draw3DObjectBoth(programInfo, this.vao, this.texture)
+    }
+    rotate(angle, axis, point) {
+        angle = angle * (22/7) / 180;
+        let pos= vec3.create();
+        vec3.negate(pos, this.center);
+        // mat4.translate(this.modelMatrix, this.modelMatrix, pos);
+        mat4.rotate(this.modelMatrix, this.modelMatrix, angle, axis);
+        // mat4.translate(this.modelMatrix, this.modelMatrix, this.position);
+    }
+    translate(distance) {
+        let temp_mat = mat4.create();
+        mat4.translate(temp_mat, temp_mat, distance);
+        mat4.multiply(this.modelMatrix, temp_mat, this.modelMatrix);
+        vec3.add(this.center, this.center, distance)
     }
 }

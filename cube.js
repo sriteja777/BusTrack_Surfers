@@ -1,20 +1,49 @@
-
+"use strict";
 
 var cubeRotation = 0.0;
+var track = [];
+var rect_track = [];
+var brick_wall = [];
+var coins = [];
+var band_pass_barriers = [];
+var high_pass_barriers = [];
+var low_pass_barriers = [];
+var left_track;
+var right_track;
+var center_track;
+var right_wall;
+var left_wall;
+var ground;
+var trains = [];
+var flying_boosters = [];
 
+var speed = 0.1;
+var mario;
+
+let gray = false;
+
+var down_obst;
 main();
 
 var rect;
 var rect2;
 var cuboid;
+var textureCuboid;
 
 
 
+// window.addEventListener('keyup', function(event) { console.log('key pressed') }, false);
 
 //
 // Start here
 //
 function main() {
+
+    Mousetrap.bind('left', () => mario.move_left());
+    Mousetrap.bind('right', () => mario.move_right());
+    Mousetrap.bind('up', () => mario.move_up());
+    Mousetrap.bind('down', () => mario.move_back());
+    Mousetrap.bind('g', () => { gray = !gray});
 
 
     // If we don't have a GL context, give up now
@@ -23,6 +52,8 @@ function main() {
         alert('Unable to initialize WebGL. Your browser or machine may not support it.');
         return;
     }
+
+    // window.addEventListener('keydown', function(event) { Key.onKeydown(event); }, false);
 
     // Vertex shader program
 
@@ -40,6 +71,37 @@ function main() {
     }
   `;
 
+    const vsSrc2 = `
+        attribute vec4 aVertexPosition;
+        attribute vec2 aTextureCoord;
+        
+        uniform mat4 uMVPMatrix;
+        
+        varying highp vec2 vTextureCoord;
+        
+        void main(void) {
+            gl_Position = uMVPMatrix * aVertexPosition;
+            vTextureCoord = aTextureCoord;
+        }
+    `;
+
+    const vsSrcBoth = `
+        attribute vec4 aVertexPosition;
+        attribute vec2 aTextureCoord;
+        attribute vec4 aVertexColor;
+        
+        uniform mat4 uMVPMatrix;
+        
+        varying lowp vec4 vColor;
+        varying highp vec2 vTextureCoord;
+        
+        void main(void) {
+            gl_Position = uMVPMatrix * aVertexPosition;
+            vTextureCoord = aTextureCoord;
+            vColor = aVertexColor;
+            }
+    `;
+
     // Fragment shader program
 
     const fsSource = `
@@ -50,22 +112,81 @@ function main() {
     }
   `;
 
+
+    const fsSrc2 = `
+        varying highp vec2 vTextureCoord;
+        
+        uniform sampler2D uSampler;
+        void main(void) {
+            gl_FragColor = texture2D(uSampler, vTextureCoord);
+        }
+    `;
+
+    const fsSrcboth = `
+        varying highp vec2 vTextureCoord;
+        varying lowp vec4 vColor;
+        uniform sampler2D uSampler;
+        
+    void main(void) {
+      gl_FragColor = texture2D(uSampler, vTextureCoord) * vColor;
+    }
+    `;
+
+    const fsSrcGray = `
+        varying highp vec2 vTextureCoord;
+        varying lowp vec4 vColor;
+        uniform sampler2D uSampler;
+        uniform bool uGray;
+        
+    void main(void) {
+        if (uGray)
+        {
+            highp vec4 texelColor = texture2D(uSampler, vTextureCoord).rgba;
+            highp float grayScale = dot(texelColor.rgb, vec3(0.199, 0.587, 0.114));
+            highp vec3 grayImage = vec3(grayScale, grayScale, grayScale);
+            gl_FragColor = vec4(grayImage, texelColor.a);
+        }
+        else 
+        {
+            gl_FragColor = texture2D(uSampler, vTextureCoord) * vColor;
+        }
+    }
+    `;
+
+
     // Initialize a shader program; this is where all the lighting
     // for the vertices and so forth is established.
-    const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+    // const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+    const shaderProgram = initShaderProgram(gl, vsSrcBoth, fsSrcGray);
+    // const shaderProgramColors = initShaderProgram(gl, vsSource, fsSource);
 
     // Collect all the info needed to use the shader program.
     // Look up which attributes our shader program is using
     // for aVertexPosition, aVevrtexColor and also
     // look up uniform locations.
+
+    // const programInfo = {
+    //     program: shaderProgram,
+    //     attribLocations: {
+    //         vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+    //         vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
+    //     },
+    //     uniformLocations: {
+    //         MVPMatrix: gl.getUniformLocation(shaderProgram, 'uMVPMatrix'),
+    //         // modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+    //     },
+    // };
+
     const programInfo = {
         program: shaderProgram,
         attribLocations: {
             vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
             vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
+            textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
         },
         uniformLocations: {
             MVPMatrix: gl.getUniformLocation(shaderProgram, 'uMVPMatrix'),
+            uSampler: gl.getUniformLocation(shaderProgram, 'uSampler')
             // modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
         },
     };
@@ -83,10 +204,38 @@ function main() {
         then = now;
 
         drawScene(gl, programInfo, buffers, deltaTime);
+        tick();
 
         requestAnimationFrame(render);
     }
     requestAnimationFrame(render);
+}
+
+
+function tick() {
+    // cam_pos[2] -= speed;
+    // mario.move_forward(speed);
+    mario.tick(speed);
+
+    for (let i=0;i<coins.length;i++) {
+        coins[i].rotate(1, Y_AXIS, ORIGIN)
+    }
+    // flying_boosters.forEach((v,i,a) => a[i].tick());
+
+    flying_boosters.forEach((v,i,a) =>  {
+        // alert('mario -> ' + mario.position.toString() + ' booster -> ' + a[i].position.toString() + 'dist' + vec3.distance(a[i].position, mario.position).toString());
+        if (!a[i].taken) {
+            if (vec3.distance(a[i].position, mario.position) < 0.68) {
+                // alert('ok')
+                a[i].taken = true;
+                mario.move_in_circle([a[i].position[0], a[i].position[1], a[i].position[2] - 50], 50)
+
+            }
+        }
+    });
+
+
+
 }
 
 //
@@ -166,8 +315,100 @@ function initBuffers(gl) {
 
     // rect = new Rectangle(2,2, new vec3.fromValues(0,1,1), );
     // rect2 = new Rectangle(2,2, new vec3.fromValues(-1, 0, 0));
-    cuboid = new Cuboid(new vec3.fromValues(-5, -3, 0), 2,2,2, '')
+    // cuboid = new Cuboid(new vec3.fromValues(-5, -1, 0), 2,2,2, '');
+    // textureCuboid = new cuboidWithTexture(new vec3.fromValues(0,-2.5,4), 2,2,2);
+    // for (let i=0;i<50;i++) {
+        // track.push(new cuboidWithTexture(new vec3.fromValues(0,-2.5,4-2*i), 2,2,2));
+        // track.push(new cuboidWithTexture(new vec3.fromValues(-3,-2.5,4-2*i), 2,2,2));
+        // track.push(new cuboidWithTexture(new vec3.fromValues(3,-2.5,4-2*i), 2,2,2))
 
+    // }
+
+    let temp_mat = mat2.fromValues(1,2,3,4);
+    console.log(temp_mat);
+    let tran = mat2.create();
+    mat2.transpose(tran, temp_mat);
+    mat4.sub(temp_mat, temp_mat, mat2.fromValues(1,1,0,1));
+    mat4.sub(tran, tran, mat2.fromValues(1,1,0,1));
+
+    console.log(temp_mat);
+    console.log(tran);
+    // sleep(500);
+
+    ground = new Rectangle(1000, 1000, [0,-2.5,0], -1, -1, COLORS_0_1.SANDY_BROWN);
+    ground.rotate(-90, X_AXIS, ORIGIN);
+    let ground_y = -2.5;
+    // let img = 'rail8.jpg';
+    // for (let i=0;i<100;i++) {
+    //     rect_track.push(new Rectangle(2,2, new vec3.fromValues(0, -2.5, 4-2*i), img));
+    //     rect_track[rect_track.length - 1].rotate(-90, X_AXIS, ORIGIN);
+    //     rect_track.push(new Rectangle(2,2, new vec3.fromValues(-3, -2.5, 4-2*i), img));
+    //     rect_track[rect_track.length-1].rotate(-90, X_AXIS, ORIGIN);
+    //     rect_track.push(new Rectangle(2,2, new vec3.fromValues(3, -2.5, 4-2*i), img));
+    //     rect_track[rect_track.length-1].rotate(-90, X_AXIS, ORIGIN);
+    // }
+    let img = 'rail10.jpg';
+    left_track = new Rectangle(200,2, vec3.fromValues(-3, -2.5, -100), img, {s: gl.CLAMP_TO_EDGE, t:gl.REPEAT}, ground.color);
+    left_track.rotate(-90, X_AXIS, ORIGIN);
+    right_track = new Rectangle(200,2, vec3.fromValues(3, -2.5, -100), img, {s: gl.CLAMP_TO_EDGE, t:gl.REPEAT}, ground.color);
+    right_track.rotate(-90, X_AXIS, ORIGIN);
+    center_track = new Rectangle(200,2, vec3.fromValues(0, -2.5, -100), img, {s: gl.CLAMP_TO_EDGE, t:gl.REPEAT}, ground.color);
+    center_track.rotate(-90, X_AXIS, ORIGIN);
+    img = 'wall4.jpg';
+    // for (let i=0;i<100;i++) {
+    //     // brick_wall.push(new Rectangle(2,2, new vec3.fromValues(6,-0.7,4-2*i), img));
+    //     // brick_wall[brick_wall.length-1].rotate(-90, Y_AXIS, ORIGIN);
+    //     // brick_wall.push(new Rectangle(2,2, new vec3.fromValues(-4,-0.7,4-2*i), img));
+    //     // brick_wall[brick_wall.length-1].rotate(-90, Y_AXIS, ORIGIN)
+    //
+    //     brick_wall.push(new Cuboid(vec3.fromValues(6,-0.7,4-2*i), 1,1,1, '', img));
+    //     brick_wall.push(new Cuboid(vec3.fromValues(-6,-0.7,4-2*i),1,1, 1, '',img));
+    // }
+
+    // cuboid = new Cuboid(vec3.fromValues(1,1,-1),2,2, 'sd');
+    right_wall = new Cuboid(vec3.fromValues(6,-0.5,-100), 1,2,200,'', 'wall9.jpg');
+    left_wall = new Cuboid(vec3.fromValues(-6,-0.5,-100), 1,2,200,'', 'wall9.jpg');
+    mario = new Player([0,0,1]);
+    for (let i=0;i<10;i++) {
+        coins.push(new Circle(vec3.fromValues(0, -1, -15 -2*i), 0.4, COLORS_0_1.GOLD));
+        coins[i].rotate(Math.floor((Math.random() * 50) + 1), Y_AXIS, ORIGIN)
+    }
+
+    // down_obst = new Barrier(vec3.fromValues(left_track.position[0], ground_y + 2, -20), 1, 0.1, );
+    high_pass_barriers.push(new HighPassBarrier(vec3.fromValues(right_track.position[0], ground_y + 1, -20)));
+    high_pass_barriers.push(new HighPassBarrier(vec3.fromValues(right_track.position[0], ground_y + 1, -60)));
+
+    low_pass_barriers.push(new LowPassBarrier(vec3.fromValues(left_track.position[0], ground_y + 3, -20)));
+    low_pass_barriers.push(new LowPassBarrier(vec3.fromValues(left_track.position[0], ground_y + 3, -60)));
+    band_pass_barriers.push(new BandPassBarrier(vec3.fromValues(center_track.position[0], ground_y + 2, -20)));
+
+    trains.push(new Train(vec3.fromValues(left_track.position[0], ground_y + 3.2, -25)));
+    trains.push(new Train(vec3.fromValues(right_track.position[0], ground_y + 3.2, -25)));
+    trains.push(new Train(vec3.fromValues(center_track.position[0], ground_y + 3.2, -54)));
+
+
+    flying_boosters.push(new FlyingBoost([center_track.position[0], ground_y + 1.83, -15]))
+
+    for (let i=0;i<flying_boosters.length;i++) {
+
+        let start_angle = 30;
+        while(start_angle < 150) {
+            let angle = start_angle*PI/180;
+            let pos = [flying_boosters[i].position[0], 0, 0];
+            pos[1] = flying_boosters[i].position[1] + 20 * Math.sin(angle);
+            pos[2] = (flying_boosters[i].position[2]-50) + 50 * Math.cos(angle);
+            coins.push(new Circle(pos, 0.4, COLORS_0_1.GOLD));
+
+            start_angle += 5;
+        }
+    }
+
+    // right_wall.rotate(90, Z_AXIS, ORIGIN)
+
+
+
+    // let pos = new vec3.fromValues(1,2,-40);
+    // rect_track.push(new Rectangle(2,2, pos))
     // Now send the element array to GL
 
     // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
@@ -185,7 +426,8 @@ function initBuffers(gl) {
 //
 function drawScene(gl, programInfo, buffers, deltaTime) {
     resize();
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
+    let backgroundColor = COLORS_0_1.SKY_BLUE;
+    gl.clearColor(backgroundColor[0], backgroundColor[1], backgroundColor[2], 1.0);  // Clear to black, fully opaque
     gl.clearDepth(1.0);                 // Clear everything
     gl.enable(gl.DEPTH_TEST);           // Enable depth testing
     gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
@@ -204,7 +446,7 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
     const fieldOfView = 45 * Math.PI / 180;   // in radians
     const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
     const zNear = 0.1;
-    const zFar = 100.0;
+    const zFar = 50.0;
     const projectionMatrix = mat4.create();
 
     // note: glmatrix.js always has the first argument
@@ -225,7 +467,8 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
     // Now move the drawing position a bit to where we want to
     // start drawing the square.
 
-    mat4.lookAt(viewMatrix, new vec3.fromValues(0, 0, 10), new vec3.fromValues(0,0,0), new vec3.fromValues(0,1,0));
+    mat4.lookAt(viewMatrix, cam_pos, mario.position.slice(), vec3.fromValues(0,1,0));
+    // mat4.lookAt(viewMatrix, cam_pos, vec3.fromValues(cam_pos[0],-2,cam_pos[2]-10), vec3.fromValues(0,1,0));
     // mat4.translate(modelViewMatrix,     // destination matrix
     //     modelViewMatrix,     // matrix to translate
     //     [-0.0, 1.0, -9.0]);  // amount to translate
@@ -237,7 +480,51 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
     gl.useProgram(programInfo.program);
     // rect.draw(programInfo, VP);
     // rect2.draw(programInfo, VP);
-    cuboid.draw(programInfo, VP);
+    // cuboid.draw(programInfo, VP);
+    // textureCuboid.draw(programInfo, VP);
+    // for (let i=0;i<track.length;i++) {
+    //     // track[i].draw(programInfo, VP);
+    // }
+    // for (let i=0;i<rect_track.length;i++) {
+    //     // rect_track[i].draw(programInfo, VP);
+    // }
+    // for (let i=0;i<brick_wall.length; i++) {
+    //     // console.log('came');
+    //     brick_wall[i].draw(programInfo, VP)
+    // }
+    for (let i=0;i<coins.length;i++) {
+        coins[i].draw(programInfo, VP)
+    }
+    for (let i=0;i<high_pass_barriers.length;i++) {
+        high_pass_barriers[i].draw(programInfo, VP);
+    }
+    for (let i=0;i<low_pass_barriers.length;i++) {
+        low_pass_barriers[i].draw(programInfo, VP);
+    }
+    for (let i=0;i<band_pass_barriers.length;i++) {
+        band_pass_barriers[i].draw(programInfo, VP);
+    }
+
+
+    // cuboid.draw(programInfo, VP);
+    left_wall.draw(programInfo, VP);
+    right_wall.draw(programInfo, VP);
+    left_track.draw(programInfo, VP);
+    right_track.draw(programInfo, VP);
+    center_track.draw(programInfo, VP);
+    ground.draw(programInfo, VP);
+    mario.draw(programInfo, VP);
+    for(let i=0;i<trains.length;i++) {
+        trains[i].draw(programInfo, VP);
+    }
+    flying_boosters.forEach((v,i,a) => {a[i].draw(programInfo, VP)});
+
+
+    var GrayBuffer = gl.getUniformLocation(programInfo.program, "uGray");
+    gl.uniform1i(GrayBuffer, gray);
+
+    // down_obst.draw(programInfo, VP);
+    // coin.draw(programInfo, VP);
     // Tell WebGL how to pull out the positions from the position
     // buffer into the vertexPosition attribute
     // {
