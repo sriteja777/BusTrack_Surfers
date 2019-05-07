@@ -1,5 +1,5 @@
 class Cuboid {
-    constructor(center, width, height, depth, color, textureImage = WHITE_TEXTURE, textureOptions = {s:gl.REPEAT, t:gl.REPEAT}, is_2 = true) {
+    constructor(center, width, height, depth, color, textureImage = WHITE_TEXTURE, textureOptions = {s:gl.REPEAT, t:gl.REPEAT}, is_2 = true, has_normal = false) {
         this.center = center;
         this.height = height;
         this.width = width;
@@ -176,6 +176,47 @@ class Cuboid {
             20, 21, 22,     20, 22, 23,   // left
         ];
 
+        let vertexNormals = [
+            // Front
+            0.0,  0.0,  1.0,
+            0.0,  0.0,  1.0,
+            0.0,  0.0,  1.0,
+            0.0,  0.0,  1.0,
+
+            // Back
+            0.0,  0.0, -1.0,
+            0.0,  0.0, -1.0,
+            0.0,  0.0, -1.0,
+            0.0,  0.0, -1.0,
+
+            // Top
+            0.0,  1.0,  0.0,
+            0.0,  1.0,  0.0,
+            0.0,  1.0,  0.0,
+            0.0,  1.0,  0.0,
+
+            // Bottom
+            0.0, -1.0,  0.0,
+            0.0, -1.0,  0.0,
+            0.0, -1.0,  0.0,
+            0.0, -1.0,  0.0,
+
+            // Right
+            1.0,  0.0,  0.0,
+            1.0,  0.0,  0.0,
+            1.0,  0.0,  0.0,
+            1.0,  0.0,  0.0,
+
+            // Left
+            -1.0,  0.0,  0.0,
+            -1.0,  0.0,  0.0,
+            -1.0,  0.0,  0.0,
+            -1.0,  0.0,  0.0
+        ];
+
+
+
+
         // const ind = [
         //   0, 1, 2,   0, 2, 3,  //front
         //   4,5,6,     4,7,6, // back
@@ -185,8 +226,11 @@ class Cuboid {
         //     0,3,7,  0,4,7
         // ];
         // this.vao = create3DObject(vertex_buffer_data, indices, 36, colors);
-
-        this.vao = create3DObjectBoth(vertex_buffer_data, indices, textureCoordinates, colors, 36);
+        if (!has_normal)
+        {
+            vertexNormals = -1;
+        }
+        this.vao = create3DObjectBoth(vertex_buffer_data, indices, textureCoordinates, colors, 36, vertexNormals);
         this.modelMatrix = mat4.create();
         // let temp_mat = mat4.create();
         // console.log(temp_mat);
@@ -215,6 +259,25 @@ class Cuboid {
             programInfo.uniformLocations.MVPMatrix,
             false,
             MVPMatrix);
+
+        let invert_mat = mat4.create();
+        mat4.invert(invert_mat, projectionMatrix);
+        let view_mat = mat4.create();
+        mat4.multiply(view_mat, invert_mat, VP);
+
+        let model_view = mat4.create();
+        mat4.multiply(model_view, view_mat, this.modelMatrix);
+
+        const normalMatrix = mat4.create();
+        mat4.invert(normalMatrix, model_view);
+        mat4.transpose(normalMatrix, normalMatrix);
+        gl.uniformMatrix4fv(
+            programInfo.uniformLocations.normalMatrix,
+            false,
+            normalMatrix);
+
+
+
         draw3DObjectBoth(programInfo, this.vao, this.texture)
     }
     rotate(angle, axis, point) {
