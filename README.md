@@ -19,7 +19,7 @@ Open `index.html` with your browser supporting webgl, the game will start.
 <kbd>&rarr;</kbd> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - &nbsp;move right<br/>
 
 #### _Other Controls_
-<kdb>G</kbd>  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - &nbsp;Toggle game between gray mode and color mode.
+<kbd>G</kbd>  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - &nbsp;Toggle game between gray mode and color mode.
 
 Go on collecting coins and avoiding obstacles until you get tired.
 
