@@ -4,6 +4,9 @@ const Z_AXIS = vec3.fromValues(0,0,1);
 const ORIGIN = vec3.fromValues(0,0,0);
 var cam_pos = vec3.fromValues(0,2,5);
 const PI = 3.14159265;
+var projectionMatrix = mat4.create();
+
+
 
 
 
@@ -289,10 +292,11 @@ function isPowerOf2(value) {
 }
 
 
-function create3DObjectBoth(vertices, indices, textureCoordinates, color, numVertices) {
+function create3DObjectBoth(vertices, indices, textureCoordinates, color, numVertices, vertexNormals = -1) {
     const vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
 
     const colorBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
@@ -301,6 +305,32 @@ function create3DObjectBoth(vertices, indices, textureCoordinates, color, numVer
     const textureCoordBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates), gl.STATIC_DRAW);
+
+    let normalBuffer;
+    let having_normals;
+    // let normalBuffer = gl.createBuffer();
+    if (vertexNormals === -1) {
+        // normalBuffer = -1;
+        having_normals = false;
+        normalBuffer = gl.createBuffer();
+        let temp_arr = [];
+        for (let i=0;i<numVertices;i++) {
+            temp_arr.push(0,0,0)
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(temp_arr),
+            gl.STATIC_DRAW);
+        console.log('sddsf', numVertices)
+    }
+    else {
+        having_normals = true;
+        normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexNormals),
+            gl.STATIC_DRAW);
+
+    }
 
 
     if (indices !== -1) {
@@ -314,6 +344,8 @@ function create3DObjectBoth(vertices, indices, textureCoordinates, color, numVer
             color: colorBuffer,
             texture: textureCoordBuffer,
             indices: indexBuffer,
+            normal: normalBuffer,
+            having_normals: having_normals
         }
     }
     else {
@@ -323,8 +355,13 @@ function create3DObjectBoth(vertices, indices, textureCoordinates, color, numVer
             color: colorBuffer,
             texture: textureCoordBuffer,
             indices: -1,
+            normal: normalBuffer,
+            having_normals: having_normals
         }
     }
+
+
+
 }
 
 
@@ -382,6 +419,60 @@ function draw3DObjectBoth(programInfo, vao, texture) {
         gl.enableVertexAttribArray(
             programInfo.attribLocations.vertexColor);
     }
+    if (vao.having_normals) {
+
+        // Tell WebGL how to pull out the normals from
+        // the normal buffer into the vertexNormal attribute.
+        {
+            const numComponents = 3;
+            const type = gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.normal);
+            gl.vertexAttribPointer(
+                programInfo.attribLocations.vertexNormal,
+                numComponents,
+                type,
+                normalize,
+                stride,
+                offset);
+            gl.enableVertexAttribArray(
+                programInfo.attribLocations.vertexNormal);
+        }
+        let sddf = gl.getUniformLocation(programInfo.program, "normal");
+        gl.uniform1i(sddf, true);
+        var sarg = gl.getUniformLocation(programInfo.program, "normalfs");
+        gl.uniform1i(sarg, true);
+
+
+    }
+    else {
+        {
+            const numComponents = 3;
+            const type = gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.normal);
+            gl.vertexAttribPointer(
+                programInfo.attribLocations.vertexNormal,
+                numComponents,
+                type,
+                normalize,
+                stride,
+                offset);
+            gl.enableVertexAttribArray(
+                programInfo.attribLocations.vertexNormal);
+        }
+        var sdg = gl.getUniformLocation(programInfo.program, "normal");
+        gl.uniform1i(sdg, false);
+        var sdgsd = gl.getUniformLocation(programInfo.program, "normalfs");
+        gl.uniform1i(sdgsd, false);
+    }
+
+
+
     if (vao.indices !== -1) {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vao.indices);
     }
@@ -404,6 +495,7 @@ function draw3DObjectBoth(programInfo, vao, texture) {
             gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
         }
         else {
+            // console.log('here  ',  vao.vertices.length, vao.color.length, vao.texture.length);
             gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
         }
     }
