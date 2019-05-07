@@ -2,7 +2,7 @@ class Barrier {
     constructor(position_up_stick, position_left_stick, side_stick_height, up_stick_height) {
         // this.position = position;
         const stick_height = side_stick_height;
-        this.up_stick = new Cuboid(position_up_stick, 1, up_stick_height, 0.1, '', './stickobst2.png', {s:gl.REPEAT, t:gl.REPEAT}, false);
+        this.up_stick = new Cuboid(position_up_stick, 1, up_stick_height, 0.1, '', './stickobst2.png', {s:gl.REPEAT, t:gl.REPEAT}, false, false);
 
 
 
