@@ -67,8 +67,8 @@ class Circle {
         //     // Repeat each color four times for the four vertices of the face
         //     colors = colors.concat(c, c, c, c);
         // }
-
-        this.vao = create3DObjectBoth(vertex_buffers_data, -1, textureCoordinates, colors, 20*3);
+        console.log('here  ',  vertex_buffers_data.length, colors.length, textureCoordinates.length);
+        this.vao = create3DObjectBoth(vertex_buffers_data, -1, textureCoordinates, colors, 20*3, -1);
         this.modelMatrix = mat4.create();
         let trans_mat = mat4.create();
         let rotate_mat_z = mat4.create();
