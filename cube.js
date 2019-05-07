@@ -16,11 +16,14 @@ var left_wall;
 var ground;
 var trains = [];
 var flying_boosters = [];
+let switcher = 0;
 
 var speed = 0.1;
+
 var mario;
 
 let gray = false;
+let start = false;
 
 var down_obst;
 main();
@@ -44,7 +47,8 @@ function main() {
     Mousetrap.bind('up', () => mario.move_up());
     Mousetrap.bind('down', () => mario.move_back());
     Mousetrap.bind('g', () => { gray = !gray});
-
+    Mousetrap.bind('r', () => {cam_pos[2] -= 10});
+    Mousetrap.bind('f', () => {start = !start});
 
     // If we don't have a GL context, give up now
 
@@ -102,6 +106,57 @@ function main() {
             }
     `;
 
+    const vsSrcFlash = `
+        attribute vec4 aVertexPosition;
+        attribute vec3 aVertexNormal;
+        attribute vec2 aTextureCoord;
+        attribute vec4 aVertexColor;
+        
+        uniform mat4 uMVPMatrix;
+        uniform mat4 uNormalMatrix;
+        uniform bool start;
+        uniform bool normal;
+        
+        varying lowp vec4 vColor;
+        varying highp vec2 vTextureCoord;
+        varying highp vec3 vLighting;
+        
+        void main(void) {
+            gl_Position = uMVPMatrix * aVertexPosition;
+            vTextureCoord = aTextureCoord;
+            vColor = aVertexColor;
+            
+            // Lighting
+            if (normal) {
+            highp vec3 ambientLight = vec3(0.7, 0.7, 0.7);
+            // highp vec3 directionalLightColor = vec3(0.9960, 0.8398, 0);
+            highp vec3 directionalLightColor = vec3(0.96875, 0.96875, 0.96875);
+            highp vec3 directionalLightColor2 = vec3(0, 0.4, 0);
+            // highp vec3 directionalLightColor = vec3(1,1,1);
+            // highp vec3 directionalVector = normalize(vec3(0.85, 0.8, 0.75));
+            highp vec3 directionalVector = normalize(vec3(-1, 0, 0));
+            highp vec3 directionalVector2 = normalize(vec3(1, 0, 0));
+            
+            
+            highp vec4 transformedNormal = uNormalMatrix * vec4(aVertexNormal, 1.0);
+            
+            highp float directional = max(dot(transformedNormal.xyz, directionalVector), 0.0);
+            highp float directional2 = max(dot(transformedNormal.xyz, directionalVector2), 0.0);
+            if (start) {
+            vLighting =  ambientLight + (directionalLightColor * directional) + (directionalLightColor2 * directional2);
+           
+            } else {
+            vLighting =  ambientLight; //+ (directionalLightColor * directional);
+          
+            }
+            
+            }
+            }
+    `;
+
+
+
+
     // Fragment shader program
 
     const fsSource = `
@@ -132,6 +187,7 @@ function main() {
     }
     `;
 
+
     const fsSrcGray = `
         varying highp vec2 vTextureCoord;
         varying lowp vec4 vColor;
@@ -153,11 +209,41 @@ function main() {
     }
     `;
 
+    const fsSrcFlash = `
+        varying highp vec2 vTextureCoord;
+        varying lowp vec4 vColor;
+        varying highp vec3 vLighting;
+        
+        uniform sampler2D uSampler;
+        uniform bool uGray;
+        uniform bool normalfs;
+        
+    void main(void) {
+        if (uGray)
+        {
+            highp vec4 texelColor = texture2D(uSampler, vTextureCoord).rgba;
+            highp float grayScale = dot(texelColor.rgb, vec3(0.199, 0.587, 0.114));
+            highp vec3 grayImage = vec3(grayScale, grayScale, grayScale);
+            gl_FragColor = vec4(grayImage, texelColor.a);
+        }
+        else 
+        {
+            if (normalfs) {
+            highp vec4 texelColor = texture2D(uSampler, vTextureCoord) *vColor;
+            // gl_FragColor = texture2D(uSampler, vTextureCoord) * vColor;
+            gl_FragColor = vec4(texelColor.rgb * vLighting, texelColor.a);
+            }
+            else {
+                gl_FragColor = texture2D(uSampler, vTextureCoord) * vColor;
+            }
+        }
+    }
+    `;
 
     // Initialize a shader program; this is where all the lighting
     // for the vertices and so forth is established.
     // const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-    const shaderProgram = initShaderProgram(gl, vsSrcBoth, fsSrcGray);
+    const shaderProgram = initShaderProgram(gl, vsSrcFlash, fsSrcFlash  );
     // const shaderProgramColors = initShaderProgram(gl, vsSource, fsSource);
 
     // Collect all the info needed to use the shader program.
@@ -181,12 +267,14 @@ function main() {
         program: shaderProgram,
         attribLocations: {
             vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+            vertexNormal: gl.getAttribLocation(shaderProgram, 'aVertexNormal'),
             vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
             textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
         },
         uniformLocations: {
             MVPMatrix: gl.getUniformLocation(shaderProgram, 'uMVPMatrix'),
-            uSampler: gl.getUniformLocation(shaderProgram, 'uSampler')
+            uSampler: gl.getUniformLocation(shaderProgram, 'uSampler'),
+            normalMatrix: gl.getUniformLocation(shaderProgram, 'uNormalMatrix')
             // modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
         },
     };
@@ -366,8 +454,8 @@ function initBuffers(gl) {
     // }
 
     // cuboid = new Cuboid(vec3.fromValues(1,1,-1),2,2, 'sd');
-    right_wall = new Cuboid(vec3.fromValues(6,-0.5,-100), 1,2,200,'', 'wall9.jpg');
-    left_wall = new Cuboid(vec3.fromValues(-6,-0.5,-100), 1,2,200,'', 'wall9.jpg');
+    right_wall = new Cuboid(vec3.fromValues(6,-0.5,-100), 1,2,200,'', 'wall9.jpg', {s:gl.REPEAT, t:gl.REPEAT}, true, true);
+    left_wall = new Cuboid(vec3.fromValues(-6,-0.5,-100), 1,2,200,'', 'wall9.jpg', {s:gl.REPEAT, t:gl.REPEAT}, true, true);
     mario = new Player([0,0,1]);
     for (let i=0;i<10;i++) {
         coins.push(new Circle(vec3.fromValues(0, -1, -15 -2*i), 0.4, COLORS_0_1.GOLD));
@@ -387,7 +475,7 @@ function initBuffers(gl) {
     trains.push(new Train(vec3.fromValues(center_track.position[0], ground_y + 3.2, -54)));
 
 
-    flying_boosters.push(new FlyingBoost([center_track.position[0], ground_y + 1.83, -15]))
+    flying_boosters.push(new FlyingBoost([center_track.position[0], ground_y + 1.83, -15]));
 
     for (let i=0;i<flying_boosters.length;i++) {
 
@@ -447,7 +535,7 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
     const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
     const zNear = 0.1;
     const zFar = 50.0;
-    const projectionMatrix = mat4.create();
+    // const projectionMatrix = mat4.create();
 
     // note: glmatrix.js always has the first argument
     // as the destination to receive the result.
@@ -492,6 +580,8 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
     //     // console.log('came');
     //     brick_wall[i].draw(programInfo, VP)
     // }
+
+
     for (let i=0;i<coins.length;i++) {
         coins[i].draw(programInfo, VP)
     }
@@ -509,6 +599,7 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
     // cuboid.draw(programInfo, VP);
     left_wall.draw(programInfo, VP);
     right_wall.draw(programInfo, VP);
+
     left_track.draw(programInfo, VP);
     right_track.draw(programInfo, VP);
     center_track.draw(programInfo, VP);
@@ -519,9 +610,14 @@ function drawScene(gl, programInfo, buffers, deltaTime) {
     }
     flying_boosters.forEach((v,i,a) => {a[i].draw(programInfo, VP)});
 
-
+    switcher += 1;
     var GrayBuffer = gl.getUniformLocation(programInfo.program, "uGray");
     gl.uniform1i(GrayBuffer, gray);
+    if (switcher%50 === 0)
+        start = !start;
+    var sdg = gl.getUniformLocation(programInfo.program, "start");
+    gl.uniform1i(sdg, start);
+
 
     // down_obst.draw(programInfo, VP);
     // coin.draw(programInfo, VP);
